@@ -1,20 +1,69 @@
 import { ChatInput } from '@/components/ChatInput';
 import { ChatMessage } from '@/components/ChatMessage';
 import { useChat } from '@/hooks/useChat';
+import { chatService } from '@/services/chatService';
+import { notificationService } from '@/services/notificationService';
 import { useUser } from '@clerk/clerk-expo';
-import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { FlatList, KeyboardAvoidingView, Platform, Text, TouchableOpacity, View } from 'react-native';
 
 export default function AalimChatScreen() {
   const params = useLocalSearchParams<{ chatId: string | string[] }>();
   // Handle chatId as string or array (Expo Router can return either)
   const chatId = Array.isArray(params.chatId) ? params.chatId[0] : params.chatId;
   const { user } = useUser();
+  const router = useRouter();
   const { messages, loading, sendMessage, error } = useChat(chatId || null);
   const flatListRef = useRef<FlatList>(null);
+  const [chatInfo, setChatInfo] = useState<{ userName?: string; userEmail?: string } | null>(null);
+  const previousMessagesCount = useRef(0);
   
   console.log('💬 AalimChatScreen: chatId =', chatId);
+
+  // Load chat info and request notification permissions
+  useEffect(() => {
+    if (!chatId) return;
+
+    // Request notification permissions
+    notificationService.requestPermissions();
+
+    // Load chat info to get user name (using direct document fetch - no index needed)
+    const loadChatInfo = async () => {
+      try {
+        const chat = await chatService.getChatById(chatId);
+        if (chat) {
+          setChatInfo({
+            userName: chat.userName,
+            userEmail: chat.userEmail,
+          });
+        }
+      } catch (error) {
+        console.error('Error loading chat info:', error);
+      }
+    };
+
+    loadChatInfo();
+  }, [chatId, user?.id]);
+
+  // Send notification when new message arrives (only if not from current user)
+  useEffect(() => {
+    if (messages.length > previousMessagesCount.current && messages.length > 0 && chatId) {
+      const latestMessage = messages[messages.length - 1];
+      // Only notify if message is from the other user (not from aalim)
+      if (latestMessage.senderId !== user?.id) {
+        const userName = chatInfo?.userName || 'User';
+        notificationService.sendNotification(
+          `New message from ${userName}`,
+          latestMessage.text.length > 50 
+            ? latestMessage.text.substring(0, 50) + '...' 
+            : latestMessage.text,
+          { chatId }
+        );
+      }
+    }
+    previousMessagesCount.current = messages.length;
+  }, [messages, user?.id, chatInfo, chatId]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -33,15 +82,37 @@ export default function AalimChatScreen() {
     }
   };
 
+  const displayName = chatInfo?.userName || chatInfo?.userEmail || 'User';
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       className="flex-1 bg-white"
     >
       <View className="flex-1">
-        <View className="px-4 py-3 border-b border-gray-200">
-          <Text className="text-lg font-semibold">Chat</Text>
-          {chatId && <Text className="text-xs text-gray-500">ID: {chatId}</Text>}
+        {/* Attractive Header */}
+        <View className="bg-blue-600 px-4 py-4 shadow-lg">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center flex-1">
+              <View className="w-12 h-12 bg-white rounded-full items-center justify-center mr-3 shadow-md">
+                <Text className="text-blue-600 text-xl font-bold">
+                  {displayName[0]?.toUpperCase() || 'U'}
+                </Text>
+              </View>
+              <View className="flex-1">
+                <Text className="text-white text-lg font-bold">{displayName}</Text>
+                {chatInfo?.userEmail && chatInfo?.userName && (
+                  <Text className="text-blue-100 text-xs">{chatInfo.userEmail}</Text>
+                )}
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              className="w-10 h-10 items-center justify-center"
+            >
+              <Text className="text-white text-xl">✕</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         
         {error && (
@@ -51,32 +122,45 @@ export default function AalimChatScreen() {
         )}
         
         {loading && messages.length === 0 ? (
-          <View className="flex-1 justify-center items-center">
-            <Text className="text-gray-500">Loading messages...</Text>
+          <View className="flex-1 justify-center items-center bg-gray-50">
+            <View className="w-16 h-16 bg-blue-100 rounded-full items-center justify-center mb-4">
+              <Text className="text-blue-600 text-2xl">💬</Text>
+            </View>
+            <Text className="text-gray-500 text-lg">Loading messages...</Text>
           </View>
         ) : (
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <ChatMessage message={item} currentUserId={user?.id || ''} />
-            )}
-            contentContainerStyle={{ padding: 16, flexGrow: 1 }}
-            onContentSizeChange={() => {
-              flatListRef.current?.scrollToEnd({ animated: true });
-            }}
-            onLayout={() => {
-              if (messages.length > 0) {
-                flatListRef.current?.scrollToEnd({ animated: false });
+          <View className="flex-1 bg-gray-50">
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <ChatMessage message={item} currentUserId={user?.id || ''} />
+              )}
+              contentContainerStyle={{ padding: 16, flexGrow: 1 }}
+              onContentSizeChange={() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+              }}
+              onLayout={() => {
+                if (messages.length > 0) {
+                  flatListRef.current?.scrollToEnd({ animated: false });
+                }
+              }}
+              ListEmptyComponent={
+                <View className="flex-1 justify-center items-center py-12">
+                  <View className="w-20 h-20 bg-blue-100 rounded-full items-center justify-center mb-4">
+                    <Text className="text-blue-600 text-3xl">💭</Text>
+                  </View>
+                  <Text className="text-gray-600 text-lg font-semibold mb-2">
+                    No messages yet
+                  </Text>
+                  <Text className="text-gray-400 text-sm text-center px-8">
+                    Start the conversation by sending a message
+                  </Text>
+                </View>
               }
-            }}
-            ListEmptyComponent={
-              <View className="flex-1 justify-center items-center py-8">
-                <Text className="text-gray-500">No messages yet. Start the conversation!</Text>
-              </View>
-            }
-          />
+            />
+          </View>
         )}
         
         <ChatInput onSend={handleSend} disabled={loading} />

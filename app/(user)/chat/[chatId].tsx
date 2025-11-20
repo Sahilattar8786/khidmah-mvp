@@ -13,7 +13,7 @@ export default function ChatScreen() {
   const chatId = Array.isArray(params.chatId) ? params.chatId[0] : params.chatId;
   const { user } = useUser();
   const router = useRouter();
-  const { messages, loading, sendMessage, error } = useChat(chatId || null);
+  const { messages, loading, sendMessage, error } = useChat(chatId || null, user?.id);
   const flatListRef = useRef<FlatList>(null);
   const [deleting, setDeleting] = useState(false);
   

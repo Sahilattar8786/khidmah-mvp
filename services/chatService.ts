@@ -4,6 +4,7 @@ import {
     collection,
     deleteDoc,
     doc,
+    getDoc,
     getDocs,
     onSnapshot,
     orderBy,
@@ -69,6 +70,28 @@ export const chatService = {
     const docRef = await addDoc(chatsRef, chatData);
     console.log(`✅ Chat created: ${docRef.id} between user ${userId} and aalim ${assignedAalimId}`);
     return docRef.id;
+  },
+
+  /**
+   * Get a single chat by ID (no index required)
+   */
+  async getChatById(chatId: string): Promise<Chat | null> {
+    try {
+      const chatRef = doc(db, 'chats', chatId);
+      const chatSnap = await getDoc(chatRef);
+      
+      if (chatSnap.exists()) {
+        return {
+          id: chatSnap.id,
+          ...chatSnap.data(),
+        } as Chat;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting chat by ID:', error);
+      return null;
+    }
   },
 
   // Note: These queries require Firestore composite indexes

@@ -1,10 +1,12 @@
 import { chatService, Message } from '@/services/chatService';
-import { useEffect, useState } from 'react';
+import { notificationService } from '@/services/notificationService';
+import { useEffect, useRef, useState } from 'react';
 
-export function useChat(chatId: string | null) {
+export function useChat(chatId: string | null, currentUserId?: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const previousMessagesCount = useRef(0);
 
   useEffect(() => {
     if (!chatId) {
@@ -14,22 +16,40 @@ export function useChat(chatId: string | null) {
       return;
     }
 
+    // Request notification permissions
+    notificationService.requestPermissions();
+
     console.log('🔔 useChat: Setting up subscription for chatId:', chatId);
     setLoading(true);
     setError(null);
+    previousMessagesCount.current = 0;
     
     const unsubscribe = chatService.subscribeToMessages(chatId, (newMessages) => {
       console.log('📬 useChat: Received', newMessages.length, 'messages');
-      console.log('📬 Messages:', newMessages.map(m => ({ id: m.id, text: m.text.substring(0, 20) + '...', senderId: m.senderId })));
       setMessages(newMessages);
       setLoading(false);
+
+      // Send notification for new messages from other user
+      if (newMessages.length > previousMessagesCount.current && currentUserId && chatId) {
+        const latestMessage = newMessages[newMessages.length - 1];
+        if (latestMessage.senderId !== currentUserId) {
+          notificationService.sendNotification(
+            'New message',
+            latestMessage.text.length > 50 
+              ? latestMessage.text.substring(0, 50) + '...' 
+              : latestMessage.text,
+            { chatId }
+          );
+        }
+      }
+      previousMessagesCount.current = newMessages.length;
     });
 
     return () => {
       console.log('🔕 useChat: Cleaning up subscription for chatId:', chatId);
       unsubscribe();
     };
-  }, [chatId]);
+  }, [chatId, currentUserId]);
 
   const sendMessage = async (senderId: string, text: string) => {
     if (!chatId || !text.trim()) {
