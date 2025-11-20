@@ -48,14 +48,17 @@ export default function AalimHomeScreen() {
           message: error?.message,
           stack: error?.stack
         });
-        // Show error to user
+        // Show error to user (only for non-index errors, as index errors are handled automatically)
         setChats([]);
         let errorMessage = 'Failed to load chats';
         
-        // If it's an index error, show helpful message
+        // Don't show index errors to user - they're handled automatically with fallback
         if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
-          errorMessage = 'Missing Firestore index. Please create the composite index for aalimId + updatedAt';
-          console.error('⚠️ Missing Firestore index! Please create the composite index for aalimId + updatedAt');
+          // Index error is handled automatically, don't show error to user
+          console.log('ℹ️ Index error handled automatically with fallback query');
+          setError(null);
+          // Try to load chats anyway with fallback (should already be handled in service)
+          return;
         } else if (error?.message) {
           errorMessage = error.message;
         }

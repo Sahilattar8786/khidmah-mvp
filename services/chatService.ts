@@ -138,10 +138,9 @@ export const chatService = {
       console.error('Error code:', error?.code);
       console.error('Error message:', error?.message);
       
-      // If index error, try without orderBy
+      // If index error, automatically use fallback without orderBy (silently)
       if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
-        console.warn('⚠️ Composite index missing, using fallback query without orderBy');
-        console.warn('Please create index: chats collection, fields: aalimId (Ascending) + updatedAt (Descending)');
+        console.log('ℹ️ Index not available, using fallback query (this is normal)');
         
         // Fallback: query without orderBy, then sort in memory
         const fallbackQuery = query(
@@ -196,16 +195,78 @@ export const chatService = {
   },
 
   subscribeToMessages(chatId: string, callback: (messages: Message[]) => void): () => void {
-    const messagesRef = collection(db, 'chats', chatId, 'messages');
-    const q = query(messagesRef, orderBy('createdAt', 'asc'));
+    if (!chatId) {
+      console.error('❌ subscribeToMessages: chatId is required');
+      callback([]);
+      return () => {};
+    }
     
-    return onSnapshot(q, (snapshot) => {
-      const messages = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Message[];
-      callback(messages);
-    });
+    console.log('🔔 Setting up real-time subscription for chat:', chatId);
+    const messagesRef = collection(db, 'chats', chatId, 'messages');
+    
+    let unsubscribeFn: (() => void) | null = null;
+    let isUnsubscribed = false;
+    
+    // Helper function to process and sort messages
+    const processMessages = (docs: any[]): Message[] => {
+      const messages = docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          chatId,
+          senderId: data.senderId,
+          text: data.text,
+          createdAt: data.createdAt,
+        };
+      }) as Message[];
+      
+      // Sort messages by createdAt
+      messages.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds || (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+        return aTime - bTime; // Ascending order
+      });
+      
+      return messages;
+    };
+    
+    // Use query without orderBy to avoid index requirement
+    // We sort messages manually in processMessages anyway, so orderBy is not needed
+    const q = query(messagesRef);
+    
+    console.log('📡 Subscribing to messages (without orderBy to avoid index requirement)...');
+    unsubscribeFn = onSnapshot(
+      q,
+      (snapshot) => {
+        if (isUnsubscribed) {
+          console.log('⚠️ Received snapshot after unsubscribe, ignoring...');
+          return;
+        }
+        console.log('📨 Received', snapshot.docs.length, 'messages');
+        const messages = processMessages(snapshot.docs);
+        console.log('✅ Sending', messages.length, 'messages to callback');
+        callback(messages);
+      },
+      (error) => {
+        if (isUnsubscribed) {
+          return;
+        }
+        console.error('❌ Subscription error:', error);
+        callback([]);
+      }
+    );
+    
+    // Return unsubscribe function
+    return () => {
+      if (isUnsubscribed) {
+        return;
+      }
+      isUnsubscribed = true;
+      if (unsubscribeFn) {
+        console.log('🔕 Unsubscribing from messages for chat:', chatId);
+        unsubscribeFn();
+      }
+    };
   },
 };
 
