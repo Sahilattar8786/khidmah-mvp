@@ -2,6 +2,7 @@ import { db } from '@/config/firebase';
 import {
     addDoc,
     collection,
+    deleteDoc,
     doc,
     getDocs,
     onSnapshot,
@@ -192,6 +193,39 @@ export const chatService = {
     await updateDoc(chatRef, {
       updatedAt: serverTimestamp(),
     });
+  },
+
+  /**
+   * Delete a chat and all its messages
+   * This will permanently remove the chat from the database
+   */
+  async deleteChat(chatId: string): Promise<void> {
+    if (!chatId) {
+      throw new Error('Chat ID is required');
+    }
+
+    try {
+      console.log('🗑️ Deleting chat:', chatId);
+      
+      // First, delete all messages in the subcollection
+      const messagesRef = collection(db, 'chats', chatId, 'messages');
+      const messagesSnapshot = await getDocs(messagesRef);
+      
+      const deletePromises = messagesSnapshot.docs.map(messageDoc => 
+        deleteDoc(doc(db, 'chats', chatId, 'messages', messageDoc.id))
+      );
+      
+      await Promise.all(deletePromises);
+      console.log(`✅ Deleted ${messagesSnapshot.docs.length} messages`);
+      
+      // Then delete the chat document itself
+      const chatRef = doc(db, 'chats', chatId);
+      await deleteDoc(chatRef);
+      console.log('✅ Chat deleted successfully');
+    } catch (error) {
+      console.error('❌ Error deleting chat:', error);
+      throw error;
+    }
   },
 
   /**

@@ -1,18 +1,21 @@
 import { ChatInput } from '@/components/ChatInput';
 import { ChatMessage } from '@/components/ChatMessage';
 import { useChat } from '@/hooks/useChat';
+import { chatService } from '@/services/chatService';
 import { useUser } from '@clerk/clerk-expo';
-import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Text, TouchableOpacity, View } from 'react-native';
 
 export default function ChatScreen() {
   const params = useLocalSearchParams<{ chatId: string | string[] }>();
   // Handle chatId as string or array (Expo Router can return either)
   const chatId = Array.isArray(params.chatId) ? params.chatId[0] : params.chatId;
   const { user } = useUser();
+  const router = useRouter();
   const { messages, loading, sendMessage, error } = useChat(chatId || null);
   const flatListRef = useRef<FlatList>(null);
+  const [deleting, setDeleting] = useState(false);
   
   console.log('💬 ChatScreen: chatId =', chatId);
 
@@ -33,15 +36,60 @@ export default function ChatScreen() {
     }
   };
 
+  const handleCloseChat = () => {
+    if (!chatId) return;
+
+    Alert.alert(
+      'Close Chat',
+      'Are you sure you want to close this chat? This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Close',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setDeleting(true);
+              await chatService.deleteChat(chatId);
+              console.log('✅ Chat closed, navigating to home...');
+              router.replace('/(user)/home');
+            } catch (error: any) {
+              console.error('Error closing chat:', error);
+              Alert.alert('Error', error?.message || 'Failed to close chat');
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       className="flex-1 bg-white"
     >
       <View className="flex-1">
-        <View className="px-4 py-3 border-b border-gray-200">
-          <Text className="text-lg font-semibold">Chat</Text>
-          {chatId && <Text className="text-xs text-gray-500">ID: {chatId}</Text>}
+        <View className="px-4 py-3 border-b border-gray-200 flex-row items-center justify-between">
+          <View className="flex-1">
+            <Text className="text-lg font-semibold">Chat</Text>
+            {chatId && <Text className="text-xs text-gray-500">ID: {chatId}</Text>}
+          </View>
+          <TouchableOpacity
+            onPress={handleCloseChat}
+            disabled={deleting}
+            className="px-4 py-2 bg-red-500 rounded-lg"
+            activeOpacity={0.8}
+          >
+            {deleting ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <Text className="text-white font-semibold">Close</Text>
+            )}
+          </TouchableOpacity>
         </View>
         
         {error && (
