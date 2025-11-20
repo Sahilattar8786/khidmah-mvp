@@ -38,8 +38,10 @@ export default function UserHomeScreen() {
 
     try {
       setStartingChat(aalimId);
-      // Create chat with specific aalim
-      const chatId = await chatService.createChat(user.id, aalimId);
+      // Create chat with specific aalim, including user name and email
+      const userName = user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || undefined;
+      const userEmail = user.emailAddresses[0]?.emailAddress;
+      const chatId = await chatService.createChat(user.id, aalimId, userName, userEmail);
       console.log('✅ Chat created with aalim, navigating to chat...');
       router.push(`/(user)/chat/${chatId}`);
     } catch (error: any) {

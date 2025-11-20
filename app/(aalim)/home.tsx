@@ -88,15 +88,22 @@ export default function AalimHomeScreen() {
         <FlatList
           data={chats}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              onPress={() => handleChatPress(item.id)}
-              className="px-4 py-3 border-b border-gray-200"
-            >
-              <Text className="font-semibold">Chat with {item.userId}</Text>
-              <Text className="text-gray-500 text-sm">Tap to open</Text>
-            </TouchableOpacity>
-          )}
+          renderItem={({ item }) => {
+            // Display user name if available, otherwise fallback to email or userId
+            const displayName = item.userName || item.userEmail || item.userId;
+            return (
+              <TouchableOpacity
+                onPress={() => handleChatPress(item.id)}
+                className="px-4 py-3 border-b border-gray-200"
+              >
+                <Text className="font-semibold">Chat with {displayName}</Text>
+                {item.userEmail && item.userName && (
+                  <Text className="text-gray-500 text-xs mt-1">{item.userEmail}</Text>
+                )}
+                <Text className="text-gray-500 text-sm mt-1">Tap to open</Text>
+              </TouchableOpacity>
+            );
+          }}
         />
       )}
     </View>

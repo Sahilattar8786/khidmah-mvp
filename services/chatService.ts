@@ -16,6 +16,8 @@ import {
 export interface Chat {
   id: string;
   userId: string;
+  userName?: string;
+  userEmail?: string;
   aalimId: string;
   createdAt: any;
   updatedAt: any;
@@ -36,7 +38,7 @@ export const chatService = {
    * Create a chat between a user and an aalim
    * Automatically assigns an available aalim if not provided
    */
-  async createChat(userId: string, aalimId?: string): Promise<string> {
+  async createChat(userId: string, aalimId?: string, userName?: string, userEmail?: string): Promise<string> {
     // If no aalimId provided, assign an available aalim
     let assignedAalimId: string | undefined = aalimId;
     if (!assignedAalimId) {
@@ -49,12 +51,21 @@ export const chatService = {
     }
 
     const chatsRef = collection(db, 'chats');
-    const chatData = {
+    const chatData: any = {
       userId,
       aalimId: assignedAalimId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
+    
+    // Store user name and email for display on aalim screen
+    if (userName) {
+      chatData.userName = userName;
+    }
+    if (userEmail) {
+      chatData.userEmail = userEmail;
+    }
+    
     const docRef = await addDoc(chatsRef, chatData);
     console.log(`✅ Chat created: ${docRef.id} between user ${userId} and aalim ${assignedAalimId}`);
     return docRef.id;
