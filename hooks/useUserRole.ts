@@ -15,21 +15,25 @@ export function useUserRole() {
 
     const fetchRole = async () => {
       try {
-        // Add timeout to prevent hanging
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout')), 5000)
+        // Add timeout to prevent hanging (reduced to 2 seconds)
+        const timeoutPromise = new Promise<UserRole | null>((resolve) =>
+          setTimeout(() => {
+            console.log('Role fetch timeout, defaulting to "user"');
+            resolve('user'); // Default to user on timeout
+          }, 2000)
         );
         
         const userRole = await Promise.race([
           roleService.getUserRole(user.id),
           timeoutPromise
-        ]) as UserRole | null;
+        ]);
         
-        setRole(userRole);
+        // Default to "user" if role is null
+        setRole(userRole || 'user');
       } catch (error) {
-        console.error('Error fetching user role:', error);
-        // If Firebase is not configured or times out, set role to null and continue
-        setRole(null);
+        console.error('Error fetching user role (non-blocking):', error);
+        // Default to "user" if Firebase fails
+        setRole('user');
       } finally {
         setLoading(false);
       }
