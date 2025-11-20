@@ -1,5 +1,5 @@
 import { roleService } from '@/services/roleService';
-import { useSignIn, useSignUp } from '@clerk/clerk-expo';
+import { useSignIn, useSignUp, useUser } from '@clerk/clerk-expo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -7,6 +7,7 @@ import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, T
 export default function VerifyOTPScreen() {
   const { signUp, setActive: setActiveSignUp } = useSignUp();
   const { signIn, setActive: setActiveSignIn } = useSignIn();
+  const { user } = useUser();
   const router = useRouter();
   const params = useLocalSearchParams();
   const isSignUp = params.mode === 'signup';
@@ -32,7 +33,7 @@ export default function VerifyOTPScreen() {
           // This ensures role is set immediately when account is created via OTP
           if (result.createdUserId) {
             try {
-              await roleService.setUserRole(result.createdUserId, 'user');
+              await roleService.setUserRole(result.createdUserId, 'user', user || undefined);
               console.log('✅ User role set to "user" by default (OTP signup)');
             } catch (error) {
               console.error('Error setting role (non-blocking):', error);

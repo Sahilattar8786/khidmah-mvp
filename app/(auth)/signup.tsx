@@ -1,12 +1,13 @@
 import OAuth from '@/components/OAuth';
 import { roleService } from '@/services/roleService';
-import { useSignUp } from '@clerk/clerk-expo';
+import { useSignUp, useUser } from '@clerk/clerk-expo';
 import { Link, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function SignupScreen() {
   const { signUp, setActive, isLoaded } = useSignUp();
+  const { user } = useUser();
   const router = useRouter();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -104,7 +105,7 @@ export default function SignupScreen() {
         // Set role to "user" by default BEFORE activating session
         if (completeSignUp.createdUserId) {
           try {
-            await roleService.setUserRole(completeSignUp.createdUserId, 'user');
+            await roleService.setUserRole(completeSignUp.createdUserId, 'user', user || undefined);
             console.log('✅ User role set to "user" by default');
           } catch (error) {
             console.error('Error setting role (non-blocking):', error);

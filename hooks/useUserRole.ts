@@ -15,7 +15,16 @@ export function useUserRole() {
 
     const fetchRole = async () => {
       try {
-        // Add timeout to prevent hanging (reduced to 2 seconds)
+        // First, check Clerk public metadata (instant, no network call)
+        if (user.publicMetadata?.role) {
+          const metadataRole = user.publicMetadata.role as UserRole;
+          console.log('Role from Clerk metadata:', metadataRole);
+          setRole(metadataRole);
+          setLoading(false);
+          return;
+        }
+
+        // If not in metadata, fetch from Firebase (with timeout)
         const timeoutPromise = new Promise<UserRole | null>((resolve) =>
           setTimeout(() => {
             console.log('Role fetch timeout, defaulting to "user"');
@@ -24,7 +33,7 @@ export function useUserRole() {
         );
         
         const userRole = await Promise.race([
-          roleService.getUserRole(user.id),
+          roleService.getUserRole(user.id, user),
           timeoutPromise
         ]);
         
@@ -32,7 +41,7 @@ export function useUserRole() {
         setRole(userRole || 'user');
       } catch (error) {
         console.error('Error fetching user role (non-blocking):', error);
-        // Default to "user" if Firebase fails
+        // Default to "user" if both fail
         setRole('user');
       } finally {
         setLoading(false);

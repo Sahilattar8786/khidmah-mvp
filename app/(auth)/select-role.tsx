@@ -18,7 +18,7 @@ export default function SelectRoleScreen() {
 
     try {
       setLoading(true);
-      await roleService.setUserRole(user.id, role);
+      await roleService.setUserRole(user.id, role, user);
       
       // Let root layout handle routing based on role
       // Navigation will happen automatically via useEffect in _layout.tsx

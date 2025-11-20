@@ -1,5 +1,5 @@
 import { roleService } from '@/services/roleService';
-import { useAuth, useOAuth, useSignUp } from '@clerk/clerk-expo';
+import { useAuth, useOAuth, useSignUp, useUser } from '@clerk/clerk-expo';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -9,6 +9,7 @@ export default function OAuth() {
   const { startOAuthFlow: startGoogleOAuth } = useOAuth({ strategy: 'oauth_google' });
   const { signUp: signUpFromHook, setActive: setActiveFromHook, isLoaded } = useSignUp();
   const { isSignedIn } = useAuth();
+  const { user } = useUser();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -74,7 +75,7 @@ export default function OAuth() {
               // Set role before activating session
               if (updatedSignUp.createdUserId) {
                 try {
-                  await roleService.setUserRole(updatedSignUp.createdUserId, 'user');
+                  await roleService.setUserRole(updatedSignUp.createdUserId, 'user', user || undefined);
                   console.log('✅ User role set to "user" by default (Google OAuth)');
                 } catch (error) {
                   console.error('Error setting role (non-blocking):', error);
@@ -113,7 +114,7 @@ export default function OAuth() {
           // Set role to "user" by default for NEW users (signup)
           if (signUp?.createdUserId) {
             try {
-              await roleService.setUserRole(signUp.createdUserId, 'user');
+              await roleService.setUserRole(signUp.createdUserId, 'user', user || undefined);
               console.log('✅ User role set to "user" by default (Google OAuth)');
             } catch (error) {
               console.error('Error setting role (non-blocking):', error);
