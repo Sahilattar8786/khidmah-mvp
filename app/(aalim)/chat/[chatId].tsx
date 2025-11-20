@@ -6,7 +6,7 @@ import { notificationService } from '@/services/notificationService';
 import { useUser } from '@clerk/clerk-expo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function AalimChatScreen() {
   const params = useLocalSearchParams<{ chatId: string | string[] }>();
@@ -83,89 +83,103 @@ export default function AalimChatScreen() {
   };
 
   const displayName = chatInfo?.userName || chatInfo?.userEmail || 'User';
+  const screenWidth = Dimensions.get('window').width;
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-white"
-    >
-      <View className="flex-1">
-        {/* Attractive Header */}
-        <View className="bg-blue-600 px-4 py-4 shadow-lg">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1">
-              <View className="w-12 h-12 bg-white rounded-full items-center justify-center mr-3 shadow-md">
-                <Text className="text-blue-600 text-xl font-bold">
-                  {displayName[0]?.toUpperCase() || 'U'}
-                </Text>
-              </View>
-              <View className="flex-1">
-                <Text className="text-white text-lg font-bold">{displayName}</Text>
-                {chatInfo?.userEmail && chatInfo?.userName && (
-                  <Text className="text-blue-100 text-xs">{chatInfo.userEmail}</Text>
-                )}
-              </View>
-            </View>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              className="w-10 h-10 items-center justify-center"
-            >
-              <Text className="text-white text-xl">✕</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        
-        {error && (
-          <View className="px-4 py-2 bg-red-50 border-b border-red-200">
-            <Text className="text-red-600 text-sm">{error}</Text>
-          </View>
-        )}
-        
-        {loading && messages.length === 0 ? (
-          <View className="flex-1 justify-center items-center bg-gray-50">
-            <View className="w-16 h-16 bg-blue-100 rounded-full items-center justify-center mb-4">
-              <Text className="text-blue-600 text-2xl">💬</Text>
-            </View>
-            <Text className="text-gray-500 text-lg">Loading messages...</Text>
-          </View>
-        ) : (
-          <View className="flex-1 bg-gray-50">
-            <FlatList
-              ref={flatListRef}
-              data={messages}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <ChatMessage message={item} currentUserId={user?.id || ''} />
-              )}
-              contentContainerStyle={{ padding: 16, flexGrow: 1 }}
-              onContentSizeChange={() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-              }}
-              onLayout={() => {
-                if (messages.length > 0) {
-                  flatListRef.current?.scrollToEnd({ animated: false });
-                }
-              }}
-              ListEmptyComponent={
-                <View className="flex-1 justify-center items-center py-12">
-                  <View className="w-20 h-20 bg-blue-100 rounded-full items-center justify-center mb-4">
-                    <Text className="text-blue-600 text-3xl">💭</Text>
-                  </View>
-                  <Text className="text-gray-600 text-lg font-semibold mb-2">
-                    No messages yet
-                  </Text>
-                  <Text className="text-gray-400 text-sm text-center px-8">
-                    Start the conversation by sending a message
+    <SafeAreaView className="flex-1 bg-white">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        className="flex-1"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <View className="flex-1">
+          {/* Attractive Header */}
+          <View className="bg-blue-600 px-4 py-4 shadow-lg" style={{ paddingTop: Platform.OS === 'ios' ? 8 : 16 }}>
+            <View className="flex-row items-center justify-between">
+              <TouchableOpacity
+                onPress={() => router.back()}
+                className="w-10 h-10 items-center justify-center mr-2"
+                activeOpacity={0.7}
+              >
+                <Text className="text-white text-2xl">←</Text>
+              </TouchableOpacity>
+              <View className="flex-row items-center flex-1">
+                <View className="w-12 h-12 bg-white rounded-full items-center justify-center mr-3 shadow-md" style={{ width: screenWidth < 375 ? 40 : 48, height: screenWidth < 375 ? 40 : 48 }}>
+                  <Text className="text-blue-600 font-bold" style={{ fontSize: screenWidth < 375 ? 16 : 20 }}>
+                    {displayName[0]?.toUpperCase() || 'U'}
                   </Text>
                 </View>
-              }
-            />
+                <View className="flex-1">
+                  <Text className="text-white font-bold" style={{ fontSize: screenWidth < 375 ? 16 : 18 }} numberOfLines={1}>
+                    {displayName}
+                  </Text>
+                  {chatInfo?.userEmail && chatInfo?.userName && (
+                    <Text className="text-blue-100 text-xs mt-0.5" numberOfLines={1}>
+                      {chatInfo.userEmail}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </View>
           </View>
-        )}
-        
-        <ChatInput onSend={handleSend} disabled={loading} />
-      </View>
-    </KeyboardAvoidingView>
+          
+          {error && (
+            <View className="px-4 py-2 bg-red-50 border-b border-red-200">
+              <Text className="text-red-600 text-sm">{error}</Text>
+            </View>
+          )}
+          
+          {loading && messages.length === 0 ? (
+            <View className="flex-1 justify-center items-center bg-gray-50">
+              <View className="w-16 h-16 bg-blue-100 rounded-full items-center justify-center mb-4">
+                <Text className="text-blue-600 text-2xl">💬</Text>
+              </View>
+              <Text className="text-gray-500 text-lg">Loading messages...</Text>
+            </View>
+          ) : (
+            <View className="flex-1 bg-gray-50">
+              <FlatList
+                ref={flatListRef}
+                data={messages}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <ChatMessage message={item} currentUserId={user?.id || ''} />
+                )}
+                contentContainerStyle={{ 
+                  padding: screenWidth < 375 ? 12 : 16, 
+                  flexGrow: 1,
+                  paddingBottom: 20
+                }}
+                showsVerticalScrollIndicator={false}
+                onContentSizeChange={() => {
+                  flatListRef.current?.scrollToEnd({ animated: true });
+                }}
+                onLayout={() => {
+                  if (messages.length > 0) {
+                    flatListRef.current?.scrollToEnd({ animated: false });
+                  }
+                }}
+                ListEmptyComponent={
+                  <View className="flex-1 justify-center items-center py-12 px-4">
+                    <View className="w-20 h-20 bg-blue-100 rounded-full items-center justify-center mb-4">
+                      <Text className="text-blue-600 text-3xl">💭</Text>
+                    </View>
+                    <Text className="text-gray-600 text-lg font-semibold mb-2 text-center">
+                      No messages yet
+                    </Text>
+                    <Text className="text-gray-400 text-sm text-center px-4">
+                      Start the conversation by sending a message
+                    </Text>
+                  </View>
+                }
+              />
+            </View>
+          )}
+          
+          <ChatInput onSend={handleSend} disabled={loading} />
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
