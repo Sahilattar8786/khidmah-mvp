@@ -30,46 +30,23 @@ export default function AalimHomeScreen() {
 
     registerAalim();
 
-    const loadChats = async () => {
-      try {
-        console.log('🔍 Loading chats for aalim');
-        console.log('📋 Current user ID:', user.id);
-        console.log('📋 User email:', user.emailAddresses[0]?.emailAddress);
-        console.log('📋 Expected aalimId in Firebase:', user.id);
-        setError(null);
-        const aalimChats = await chatService.getAalimChats(user.id);
-        console.log('✅ Loaded chats:', aalimChats.length);
-        console.log('Chats data:', JSON.stringify(aalimChats, null, 2));
-        setChats(aalimChats);
-      } catch (error: any) {
-        console.error('❌ Error loading chats:', error);
-        console.error('Error details:', {
-          code: error?.code,
-          message: error?.message,
-          stack: error?.stack
-        });
-        // Show error to user (only for non-index errors, as index errors are handled automatically)
-        setChats([]);
-        let errorMessage = 'Failed to load chats';
-        
-        // Don't show index errors to user - they're handled automatically with fallback
-        if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
-          // Index error is handled automatically, don't show error to user
-          console.log('ℹ️ Index error handled automatically with fallback query');
-          setError(null);
-          // Try to load chats anyway with fallback (should already be handled in service)
-          return;
-        } else if (error?.message) {
-          errorMessage = error.message;
-        }
-        
-        setError(errorMessage);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // Set up real-time subscription for chats
+    console.log('🔔 Setting up real-time subscription for aalim chats');
+    setLoading(true);
+    setError(null);
 
-    loadChats();
+    const unsubscribe = chatService.subscribeToAalimChats(user.id, (newChats) => {
+      console.log('📬 Received', newChats.length, 'chats in real-time');
+      setChats(newChats);
+      setLoading(false);
+      setError(null);
+    });
+
+    // Cleanup subscription on unmount
+    return () => {
+      console.log('🔕 Cleaning up aalim chats subscription');
+      unsubscribe();
+    };
   }, [user?.id]);
 
   const handleChatPress = (chatId: string) => {

@@ -194,6 +194,77 @@ export const chatService = {
     });
   },
 
+  /**
+   * Subscribe to aalim chats in real-time
+   * Listens for new chats assigned to the aalim and updates automatically
+   */
+  subscribeToAalimChats(aalimId: string, callback: (chats: Chat[]) => void): () => void {
+    if (!aalimId) {
+      console.error('❌ subscribeToAalimChats: aalimId is required');
+      callback([]);
+      return () => {};
+    }
+    
+    console.log('🔔 Setting up real-time subscription for aalim chats:', aalimId);
+    const chatsRef = collection(db, 'chats');
+    
+    let unsubscribeFn: (() => void) | null = null;
+    let isUnsubscribed = false;
+    
+    // Helper function to process and sort chats
+    const processChats = (docs: any[]): Chat[] => {
+      const chats = docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Chat[];
+      
+      // Sort chats by updatedAt (descending - most recent first)
+      chats.sort((a, b) => {
+        const aTime = a.updatedAt?.toMillis?.() || a.updatedAt?.seconds || (a.updatedAt ? new Date(a.updatedAt).getTime() : 0);
+        const bTime = b.updatedAt?.toMillis?.() || b.updatedAt?.seconds || (b.updatedAt ? new Date(b.updatedAt).getTime() : 0);
+        return bTime - aTime; // Descending order
+      });
+      
+      return chats;
+    };
+    
+    // Use query without orderBy to avoid index requirement
+    // We sort chats manually anyway, so orderBy is not needed
+    const q = query(chatsRef, where('aalimId', '==', aalimId));
+    
+    console.log('📡 Subscribing to aalim chats (without orderBy to avoid index requirement)...');
+    unsubscribeFn = onSnapshot(
+      q,
+      (snapshot) => {
+        if (isUnsubscribed) {
+          return;
+        }
+        console.log('📨 Received', snapshot.docs.length, 'chats for aalim');
+        const chats = processChats(snapshot.docs);
+        callback(chats);
+      },
+      (error) => {
+        if (isUnsubscribed) {
+          return;
+        }
+        console.error('❌ Subscription error:', error);
+        callback([]);
+      }
+    );
+    
+    // Return unsubscribe function
+    return () => {
+      if (isUnsubscribed) {
+        return;
+      }
+      isUnsubscribed = true;
+      if (unsubscribeFn) {
+        console.log('🔕 Unsubscribing from aalim chats:', aalimId);
+        unsubscribeFn();
+      }
+    };
+  },
+
   subscribeToMessages(chatId: string, callback: (messages: Message[]) => void): () => void {
     if (!chatId) {
       console.error('❌ subscribeToMessages: chatId is required');
