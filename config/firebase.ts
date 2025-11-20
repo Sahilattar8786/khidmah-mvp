@@ -32,8 +32,8 @@ export const auth = getAuth(app);
 
 // Export config for checking if Firebase is configured
 export const isFirebaseConfigured = () => {
+  // Check if Firebase config has valid values (not placeholders)
   return firebaseConfig.projectId === 'khidmah-mvp' && 
-         firebaseConfig.apiKey !== 'AIzaSyCn6flpCtyReKSS84Nw9mKcdlYJ2svi5GE' &&
          firebaseConfig.apiKey.startsWith('AIza');
 };
 

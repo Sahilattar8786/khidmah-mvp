@@ -1,14 +1,26 @@
+import { aalimService } from '@/services/aalimService';
 import { roleService } from '@/services/roleService';
 import { useUser } from '@clerk/clerk-expo';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function SelectRoleScreen() {
   const { user } = useUser();
   const router = useRouter();
-  const [role, setRole] = useState<'user' | 'aalim' | null>(null);
+  const params = useLocalSearchParams();
+  const isAalimMode = params.mode === 'aalim'; // If user is already aalim in Clerk, just need to register
+  const [role, setRole] = useState<'user' | 'aalim' | null>(
+    isAalimMode ? 'aalim' : null
+  );
   const [loading, setLoading] = useState(false);
+
+  // If user is already aalim in Clerk metadata, pre-select aalim role
+  useEffect(() => {
+    if (user?.publicMetadata?.role === 'aalim') {
+      setRole('aalim');
+    }
+  }, [user]);
 
   const onSelectRole = async () => {
     if (!role || !user?.id) {
@@ -18,7 +30,19 @@ export default function SelectRoleScreen() {
 
     try {
       setLoading(true);
+      
+      // Set role in Clerk metadata and Firebase
       await roleService.setUserRole(user.id, role, user);
+      
+      // If aalim, also register them in Firebase aalims collection
+      if (role === 'aalim') {
+        await aalimService.registerAalim(
+          user.id,
+          user.emailAddresses[0]?.emailAddress,
+          `${user.firstName || ''} ${user.lastName || ''}`.trim() || undefined
+        );
+        console.log('✅ Aalim registered in Firebase');
+      }
       
       // Let root layout handle routing based on role
       // Navigation will happen automatically via useEffect in _layout.tsx
@@ -54,77 +78,104 @@ export default function SelectRoleScreen() {
           <View className="bg-blue-600 w-20 h-20 rounded-full items-center justify-center mb-4 shadow-lg">
             <Text className="text-white text-3xl font-bold">K</Text>
           </View>
-          <Text className="text-4xl font-bold text-gray-900 mb-2">Choose Your Role</Text>
+          <Text className="text-4xl font-bold text-gray-900 mb-2">
+            {isAalimMode ? 'Complete Your Profile' : 'Choose Your Role'}
+          </Text>
           <Text className="text-gray-600 text-base text-center px-4">
-            Select how you'd like to use Khidmah
+            {isAalimMode 
+              ? 'Please confirm your role to continue as an Aalim'
+              : "Select how you'd like to use Khidmah"
+            }
           </Text>
         </View>
 
         {/* Role Selection Cards */}
         <View className="mb-8">
-          <View className="flex-row gap-4 mb-4">
+          {isAalimMode ? (
+            // If aalim mode, only show aalim option (read-only, already selected)
             <TouchableOpacity
-              onPress={() => setRole('user')}
-              disabled={loading}
-              className={`flex-1 py-6 rounded-2xl border-2 ${
-                role === 'user' 
-                  ? 'bg-blue-600 border-blue-600 shadow-xl' 
-                  : 'bg-white border-gray-200 shadow-sm'
-              }`}
-              activeOpacity={0.7}
+              disabled={true}
+              className="flex-1 py-6 rounded-2xl border-2 bg-blue-600 border-blue-600 shadow-xl"
+              activeOpacity={1}
             >
               <View className="items-center">
-                <View className={`w-12 h-12 rounded-full items-center justify-center mb-3 ${
-                  role === 'user' ? 'bg-blue-500' : 'bg-gray-100'
-                }`}>
-                  <Text className={`text-2xl ${role === 'user' ? 'text-white' : 'text-gray-600'}`}>
-                    👤
-                  </Text>
+                <View className="w-12 h-12 rounded-full items-center justify-center mb-3 bg-blue-500">
+                  <Text className="text-2xl text-white">🕌</Text>
                 </View>
-                <Text className={`text-center font-bold text-lg mb-1 ${
-                  role === 'user' ? 'text-white' : 'text-gray-900'
-                }`}>
-                  User
-                </Text>
-                <Text className={`text-center text-xs px-2 ${
-                  role === 'user' ? 'text-blue-100' : 'text-gray-500'
-                }`}>
-                  Seeking guidance
-                </Text>
-              </View>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              onPress={() => setRole('aalim')}
-              disabled={loading}
-              className={`flex-1 py-6 rounded-2xl border-2 ${
-                role === 'aalim' 
-                  ? 'bg-blue-600 border-blue-600 shadow-xl' 
-                  : 'bg-white border-gray-200 shadow-sm'
-              }`}
-              activeOpacity={0.7}
-            >
-              <View className="items-center">
-                <View className={`w-12 h-12 rounded-full items-center justify-center mb-3 ${
-                  role === 'aalim' ? 'bg-blue-500' : 'bg-gray-100'
-                }`}>
-                  <Text className={`text-2xl ${role === 'aalim' ? 'text-white' : 'text-gray-600'}`}>
-                    🕌
-                  </Text>
-                </View>
-                <Text className={`text-center font-bold text-lg mb-1 ${
-                  role === 'aalim' ? 'text-white' : 'text-gray-900'
-                }`}>
+                <Text className="text-center font-bold text-lg mb-1 text-white">
                   Aalim
                 </Text>
-                <Text className={`text-center text-xs px-2 ${
-                  role === 'aalim' ? 'text-blue-100' : 'text-gray-500'
-                }`}>
+                <Text className="text-center text-xs px-2 text-blue-100">
                   Providing guidance
                 </Text>
               </View>
             </TouchableOpacity>
-          </View>
+          ) : (
+            // Normal mode: show both options
+            <View className="flex-row gap-4 mb-4">
+              <TouchableOpacity
+                onPress={() => setRole('user')}
+                disabled={loading}
+                className={`flex-1 py-6 rounded-2xl border-2 ${
+                  role === 'user' 
+                    ? 'bg-blue-600 border-blue-600 shadow-xl' 
+                    : 'bg-white border-gray-200 shadow-sm'
+                }`}
+                activeOpacity={0.7}
+              >
+                <View className="items-center">
+                  <View className={`w-12 h-12 rounded-full items-center justify-center mb-3 ${
+                    role === 'user' ? 'bg-blue-500' : 'bg-gray-100'
+                  }`}>
+                    <Text className={`text-2xl ${role === 'user' ? 'text-white' : 'text-gray-600'}`}>
+                      👤
+                    </Text>
+                  </View>
+                  <Text className={`text-center font-bold text-lg mb-1 ${
+                    role === 'user' ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    User
+                  </Text>
+                  <Text className={`text-center text-xs px-2 ${
+                    role === 'user' ? 'text-blue-100' : 'text-gray-500'
+                  }`}>
+                    Seeking guidance
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                onPress={() => setRole('aalim')}
+                disabled={loading}
+                className={`flex-1 py-6 rounded-2xl border-2 ${
+                  role === 'aalim' 
+                    ? 'bg-blue-600 border-blue-600 shadow-xl' 
+                    : 'bg-white border-gray-200 shadow-sm'
+                }`}
+                activeOpacity={0.7}
+              >
+                <View className="items-center">
+                  <View className={`w-12 h-12 rounded-full items-center justify-center mb-3 ${
+                    role === 'aalim' ? 'bg-blue-500' : 'bg-gray-100'
+                  }`}>
+                    <Text className={`text-2xl ${role === 'aalim' ? 'text-white' : 'text-gray-600'}`}>
+                      🕌
+                    </Text>
+                  </View>
+                  <Text className={`text-center font-bold text-lg mb-1 ${
+                    role === 'aalim' ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Aalim
+                  </Text>
+                  <Text className={`text-center text-xs px-2 ${
+                    role === 'aalim' ? 'text-blue-100' : 'text-gray-500'
+                  }`}>
+                    Providing guidance
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
         
         {/* Continue Button */}

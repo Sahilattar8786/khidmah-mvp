@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { chatService } from '@/services/chatService';
 import { useUser } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
-import { chatService } from '@/services/chatService';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
 
 export default function UserHomeScreen() {
   const { user } = useUser();
@@ -17,11 +17,14 @@ export default function UserHomeScreen() {
 
     try {
       setLoading(true);
+      // Create chat - automatically assigns an available aalim
       const chatId = await chatService.createChat(user.id);
+      console.log('✅ Chat created with aalim, navigating to chat...');
       router.push(`/(user)/chat/${chatId}`);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to start chat');
-      console.error(error);
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Failed to start chat';
+      Alert.alert('Error', errorMessage);
+      console.error('Chat creation error:', error);
     } finally {
       setLoading(false);
     }

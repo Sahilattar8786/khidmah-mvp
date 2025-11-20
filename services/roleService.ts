@@ -20,6 +20,16 @@ export const roleService = {
             },
           });
           console.log(`✅ Role "${role}" set in Clerk public metadata`);
+          
+          // If role is aalim, also register them in Firebase aalims collection
+          if (role === 'aalim') {
+            const { aalimService } = await import('./aalimService');
+            await aalimService.registerAalim(
+              userId,
+              user.emailAddresses[0]?.emailAddress,
+              `${user.firstName || ''} ${user.lastName || ''}`.trim() || undefined
+            );
+          }
         } catch (clerkError) {
           console.error('Error setting role in Clerk metadata (non-blocking):', clerkError);
           // Continue to Firebase even if Clerk fails

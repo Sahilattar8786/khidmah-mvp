@@ -7,6 +7,7 @@ import 'react-native-reanimated';
 
 import { clerkConfig } from '@/config/clerk';
 import { useUserRole } from '@/hooks/useUserRole';
+import { aalimService } from '@/services/aalimService';
 
 function RootLayoutNav() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -15,6 +16,7 @@ function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
   const [isNavigatorReady, setIsNavigatorReady] = useState(false);
+  const [aalimCheckDone, setAalimCheckDone] = useState(false);
 
   // Ensure navigator is mounted before attempting navigation
   useEffect(() => {
@@ -94,9 +96,49 @@ function RootLayoutNav() {
         }, 100);
       }
     } else if (userRole === 'aalim') {
-      // Navigate to aalim home if not already there
-      if (!inAalimGroup && !inAuthGroup) {
-        console.log('Routing to aalim home...', { inAalimGroup, inAuthGroup, isIndex, currentSegment });
+      // Check if aalim is registered in Firebase
+      // If not registered, redirect to role selection to complete registration
+      if (user?.id && !inAuthGroup && !aalimCheckDone) {
+        setAalimCheckDone(true);
+        aalimService.isAalimRegistered(user.id).then((isRegistered) => {
+          if (!isRegistered) {
+            console.log('Aalim not registered in Firebase, redirecting to role selection...');
+            setTimeout(() => {
+              try {
+                router.replace('/(auth)/select-role?mode=aalim');
+              } catch (error) {
+                console.log('Navigation error (will retry):', error);
+              }
+            }, 100);
+          } else {
+            // Aalim is registered, navigate to aalim home
+            if (!inAalimGroup && !inAuthGroup) {
+              console.log('Routing to aalim home...', { inAalimGroup, inAuthGroup, isIndex, currentSegment });
+              setTimeout(() => {
+                try {
+                  router.replace('/(aalim)/home');
+                } catch (error) {
+                  console.log('Navigation error (will retry):', error);
+                }
+              }, 100);
+            }
+          }
+        }).catch((error) => {
+          console.error('Error checking aalim registration:', error);
+          // On error, still try to navigate to aalim home
+          if (!inAalimGroup && !inAuthGroup) {
+            setTimeout(() => {
+              try {
+                router.replace('/(aalim)/home');
+              } catch (navError) {
+                console.log('Navigation error (will retry):', navError);
+              }
+            }, 100);
+          }
+        });
+      } else if (user?.id && !inAuthGroup && aalimCheckDone && !inAalimGroup) {
+        // Aalim check is done and they're registered, just navigate to home
+        console.log('Routing to aalim home (check already done)...');
         setTimeout(() => {
           try {
             router.replace('/(aalim)/home');
@@ -106,7 +148,7 @@ function RootLayoutNav() {
         }, 100);
       }
     }
-  }, [isSignedIn, isLoaded, role, roleLoading, segments, router, isNavigatorReady]);
+  }, [isSignedIn, isLoaded, role, roleLoading, segments, router, isNavigatorReady, user?.id, aalimCheckDone]);
 
   // Always render Stack first - don't block on loading
   // This ensures the navigator is mounted before we try to navigate

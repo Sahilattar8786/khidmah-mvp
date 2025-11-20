@@ -28,17 +28,34 @@ export interface Message {
   createdAt: any;
 }
 
+import { aalimService } from './aalimService';
+
 export const chatService = {
-  // For MVP: Assigns chat to default aalim. Modify to implement proper aalim assignment logic
-  async createChat(userId: string, aalimId: string = 'admin'): Promise<string> {
+  /**
+   * Create a chat between a user and an aalim
+   * Automatically assigns an available aalim if not provided
+   */
+  async createChat(userId: string, aalimId?: string): Promise<string> {
+    // If no aalimId provided, assign an available aalim
+    let assignedAalimId: string | undefined = aalimId;
+    if (!assignedAalimId) {
+      const assigned = await aalimService.assignAalimToChat();
+      
+      if (!assigned) {
+        throw new Error('No available aalims at the moment. Please try again later.');
+      }
+      assignedAalimId = assigned;
+    }
+
     const chatsRef = collection(db, 'chats');
     const chatData = {
       userId,
-      aalimId,
+      aalimId: assignedAalimId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
     const docRef = await addDoc(chatsRef, chatData);
+    console.log(`✅ Chat created: ${docRef.id} between user ${userId} and aalim ${assignedAalimId}`);
     return docRef.id;
   },
 
@@ -54,17 +71,113 @@ export const chatService = {
     })) as Chat[];
   },
 
-  // For MVP: Returns all chats. Modify to filter by aalimId for proper assignment
-  async getAalimChats(aalimId?: string): Promise<Chat[]> {
+  /**
+   * Get chats assigned to a specific aalim
+   * Filters chats by aalimId to show only chats assigned to this aalim
+   */
+  async getAalimChats(aalimId: string): Promise<Chat[]> {
+    console.log('🔍 getAalimChats called with aalimId:', aalimId);
+    console.log('🔍 aalimId type:', typeof aalimId);
+    console.log('🔍 aalimId length:', aalimId.length);
     const chatsRef = collection(db, 'chats');
-    // For MVP: Show all chats to all aalims. Uncomment below for proper filtering:
-    // const q = query(chatsRef, where('aalimId', '==', aalimId), orderBy('updatedAt', 'desc'));
-    const q = query(chatsRef, orderBy('updatedAt', 'desc'));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Chat[];
+    
+    try {
+      // Try query with orderBy first (requires composite index)
+      const q = query(
+        chatsRef, 
+        where('aalimId', '==', aalimId), 
+        orderBy('updatedAt', 'desc')
+      );
+      console.log('📊 Executing query: aalimId ==', aalimId, 'orderBy updatedAt desc');
+      const querySnapshot = await getDocs(q);
+      console.log('📄 Query returned', querySnapshot.docs.length, 'documents');
+      
+      // If no results, try to get all chats to see what aalimIds exist
+      if (querySnapshot.docs.length === 0) {
+        console.warn('⚠️ No chats found with aalimId:', aalimId);
+        console.log('🔍 Checking all chats to see available aalimIds...');
+        const allChatsQuery = query(chatsRef);
+        const allChatsSnapshot = await getDocs(allChatsQuery);
+        console.log('📊 Total chats in database:', allChatsSnapshot.docs.length);
+        allChatsSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          console.log('📝 Chat', doc.id, ':', {
+            aalimId: data.aalimId,
+            aalimIdType: typeof data.aalimId,
+            userId: data.userId,
+            matches: data.aalimId === aalimId
+          });
+        });
+      }
+      
+      const chats = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log('📝 Chat document:', doc.id, 'data:', {
+          userId: data.userId,
+          aalimId: data.aalimId,
+          aalimIdType: typeof data.aalimId,
+          updatedAt: data.updatedAt
+        });
+        return {
+          id: doc.id,
+          ...data,
+        };
+      }) as Chat[];
+      
+      // Sort manually as fallback if orderBy fails
+      chats.sort((a, b) => {
+        const aTime = a.updatedAt?.toMillis?.() || a.updatedAt?.seconds || 0;
+        const bTime = b.updatedAt?.toMillis?.() || b.updatedAt?.seconds || 0;
+        return bTime - aTime; // Descending order
+      });
+      
+      console.log('✅ Returning', chats.length, 'chats');
+      return chats;
+    } catch (error: any) {
+      console.error('❌ Query error:', error);
+      console.error('Error code:', error?.code);
+      console.error('Error message:', error?.message);
+      
+      // If index error, try without orderBy
+      if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
+        console.warn('⚠️ Composite index missing, using fallback query without orderBy');
+        console.warn('Please create index: chats collection, fields: aalimId (Ascending) + updatedAt (Descending)');
+        
+        // Fallback: query without orderBy, then sort in memory
+        const fallbackQuery = query(
+          chatsRef,
+          where('aalimId', '==', aalimId)
+        );
+        console.log('📊 Executing fallback query: aalimId ==', aalimId);
+        const querySnapshot = await getDocs(fallbackQuery);
+        console.log('📄 Fallback query returned', querySnapshot.docs.length, 'documents');
+        
+        const chats = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          console.log('📝 Chat document (fallback):', doc.id, 'data:', {
+            userId: data.userId,
+            aalimId: data.aalimId,
+            updatedAt: data.updatedAt
+          });
+          return {
+            id: doc.id,
+            ...data,
+          };
+        }) as Chat[];
+        
+        // Sort manually
+        chats.sort((a, b) => {
+          const aTime = a.updatedAt?.toMillis?.() || a.updatedAt?.seconds || (a.updatedAt ? new Date(a.updatedAt).getTime() : 0);
+          const bTime = b.updatedAt?.toMillis?.() || b.updatedAt?.seconds || (b.updatedAt ? new Date(b.updatedAt).getTime() : 0);
+          return bTime - aTime; // Descending order
+        });
+        
+        console.log('✅ Fallback returning', chats.length, 'chats');
+        return chats;
+      }
+      // Re-throw other errors
+      throw error;
+    }
   },
 
   async sendMessage(chatId: string, senderId: string, text: string): Promise<void> {
